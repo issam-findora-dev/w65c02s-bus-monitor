@@ -50,8 +50,10 @@ def main():
     table.add_column("Cycle",         justify="right",  style="dim",          width=7)
     table.add_column("Expected addr", justify="center", style="cyan",         width=15)
     table.add_column("Expected data", justify="center", style="cyan",         width=15)
+    table.add_column("Exp R/W",       justify="center", style="cyan",         width=8)
     table.add_column("Got addr",      justify="center", style="green",        width=10)
     table.add_column("Got data",      justify="center", style="green",        width=10)
+    table.add_column("Got R/W",       justify="center", style="green",        width=8)
     table.add_column("Result",        justify="center",                       width=14)
 
     passed = 0
@@ -84,23 +86,24 @@ def main():
                     continue
 
                 # Expected format (from sketch):
-                # "  1 |        $0000 |           $00 |    $0000 |       $00 | PASS  [P:1 F:0]"
+                # "  1 |    $0000 |       $00 |   R |    $0000 |       $00 |   R | PASS  [P:1 F:0]"
                 ok_str = "PASS" if "PASS" in raw else "FAIL" if "FAIL" in raw else None
                 if ok_str is None:
                     continue
 
-                # Parse fields by splitting on '|'
                 parts = [p.strip() for p in raw.split("|")]
-                if len(parts) < 6:
+                if len(parts) < 8:
                     continue
 
                 try:
                     cycle     = parts[0].strip()
                     exp_addr  = parts[1].strip()
                     exp_data  = parts[2].strip()
-                    got_addr  = parts[3].strip()
-                    got_data  = parts[4].strip()
-                    result    = parts[5].split()[0]   # "PASS" or "FAIL"
+                    exp_rw    = parts[3].strip()
+                    got_addr  = parts[4].strip()
+                    got_data  = parts[5].strip()
+                    got_rw    = parts[6].strip()
+                    result    = parts[7].split()[0]
                 except IndexError:
                     continue
 
@@ -112,7 +115,14 @@ def main():
                     failed += 1
                     result_cell = "[bold red]FAIL ✗[/]"
 
-                table.add_row(cycle, exp_addr, exp_data, got_addr, got_data, result_cell)
+                rw_color = "cyan" if exp_rw == "R" else "yellow"
+                table.add_row(
+                    cycle, exp_addr, exp_data,
+                    f"[{rw_color}]{exp_rw}[/]",
+                    got_addr, got_data,
+                    f"[{rw_color}]{got_rw}[/]",
+                    result_cell,
+                )
 
     except serial.SerialException as e:
         console.print(f"[red]Serial error:[/] {e}")

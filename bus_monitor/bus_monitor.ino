@@ -1,14 +1,15 @@
 /*
  * W65C02S Bus Monitor
  * ──────────────────────────────────────────────────────────────────────
- * Captures address + data bus on every PHI2 rising edge and streams
- * the result over USB-Serial at 115 200 baud.
+ * Captures address + data bus + R/W on every PHI2 rising edge and
+ * streams the result over USB-Serial at 115 200 baud.
  *
  * Wiring
  * ──────
  *  65C02 signal  │  Arduino / MCP pin
  * ───────────────┼───────────────────────────────────────────────────
  *  PHI2 (clk)   │  Arduino D2  (INT0)
+ *  RWB           │  Arduino A0         HIGH=read  LOW=write
  *  A0            │  Arduino D3
  *  A1            │  Arduino D4
  *  A2            │  Arduino D5
@@ -47,7 +48,7 @@
  * Mock mode
  * ─────────
  * Uncomment MOCK_HW below to run a full self-test with no hardware or
- * wiring changes needed.  The ISR, ring buffer, address/data decode,
+ * wiring changes needed.  The ISR, ring buffer, address/data/RWB decode,
  * and serial output are all exercised using software-generated data.
  */
 
@@ -55,8 +56,9 @@
 
 #include <Wire.h>
 
-// ── Clock ──────────────────────────────────────────────────────────────
-#define CLOCK_PIN   2          // PHI2 → INT0 (only pin 2 or 3 on Uno)
+// ── Clock & RWB ────────────────────────────────────────────────────────
+#define CLOCK_PIN   2    // PHI2 → INT0
+#define RWB_PIN     A0   // RWB  → PINC bit 0  (HIGH=read, LOW=write)
 
 // ── MCP23017 ───────────────────────────────────────────────────────────
 #define MCP_ADDR    0x20
@@ -66,11 +68,13 @@
 #define MCP_GPIOB   0x13
 
 // ── Ring buffer ────────────────────────────────────────────────────────
+// ISR captures all three port registers immediately at the clock edge.
 #define BUF_SIZE 16
 
 struct Snapshot {
     uint8_t pd;   // PIND at edge  (A0–A4  in bits 7:3)
     uint8_t pb;   // PINB at edge  (A5–A10 in bits 5:0)
+    uint8_t pc;   // PINC at edge  (RWB    in bit  0)
 };
 
 volatile uint8_t  g_wIdx = 0;
@@ -78,28 +82,32 @@ volatile uint8_t  g_rIdx = 0;
 Snapshot          g_buf[BUF_SIZE];
 uint32_t          g_cycle = 0;
 
-// ── Mock state (compiled in only when MOCK_HW is set) ─────────────────
+// ── Mock state ─────────────────────────────────────────────────────────
 #ifdef MOCK_HW
 static volatile uint8_t mock_PIND = 0;
 static volatile uint8_t mock_PINB = 0;
-static uint8_t          mock_mcpA = 0;   // A11–A15
-static uint8_t          mock_mcpB = 0;   // D0–D7
+static volatile uint8_t mock_PINC = 0;   // bit 0 = RWB
+static uint8_t          mock_mcpA = 0;
+static uint8_t          mock_mcpB = 0;
 static uint32_t         mock_expected_addr = 0;
 static uint8_t          mock_expected_data = 0;
+static bool             mock_expected_rwb  = true;
 static uint32_t         mock_pass = 0;
 static uint32_t         mock_fail = 0;
 #define SAMPLE_PIND() mock_PIND
 #define SAMPLE_PINB() mock_PINB
+#define SAMPLE_PINC() mock_PINC
 #else
 #define SAMPLE_PIND() PIND
 #define SAMPLE_PINB() PINB
+#define SAMPLE_PINC() PINC
 #endif
 
 // ── ISR ────────────────────────────────────────────────────────────────
 void onClockRise() {
     uint8_t next = (g_wIdx + 1) % BUF_SIZE;
     if (next != g_rIdx) {
-        g_buf[g_wIdx] = { SAMPLE_PIND(), SAMPLE_PINB() };
+        g_buf[g_wIdx] = { SAMPLE_PIND(), SAMPLE_PINB(), SAMPLE_PINC() };
         g_wIdx = next;
     }
 }
@@ -127,14 +135,14 @@ void setup() {
 
 #ifdef MOCK_HW
     Serial.println(F("=== MOCK MODE — no hardware needed ==="));
-    Serial.println(F("Driving known addr/data patterns and verifying decode."));
+    Serial.println(F("Driving known addr/data/RWB patterns and verifying decode."));
     Serial.println(F(""));
-    Serial.println(F("  Cycle | Expected addr | Expected data | Got addr | Got data | Result"));
-    Serial.println(F("--------+---------------+---------------+----------+----------+-------"));
-    // No pins or I2C to configure — fire a software tick every second
+    Serial.println(F("  Cycle | Exp addr | Exp data | R/W | Got addr | Got data | R/W | Result"));
+    Serial.println(F("--------+----------+----------+-----+----------+----------+-----+-------"));
 #else
     for (int p = 3; p <= 13; p++) pinMode(p, INPUT);
     pinMode(CLOCK_PIN, INPUT);
+    pinMode(RWB_PIN,   INPUT);
 
     Wire.begin();
     Wire.setClock(400000L);
@@ -150,30 +158,26 @@ void setup() {
 #endif
 }
 
-// ── Mock tick: inject one fake clock edge with known data ──────────────
+// ── Mock tick ──────────────────────────────────────────────────────────
 #ifdef MOCK_HW
 static void mockTick() {
     static uint16_t counter = 0;
 
-    // Build a known 16-bit address and 8-bit data from the counter
-    uint16_t addr = counter;                  // 0x0000 → 0xFFFF
+    uint16_t addr = counter;
     uint8_t  data = (uint8_t)(counter & 0xFF);
+    bool     rwb  = (counter % 2 == 0);   // even = READ, odd = WRITE
 
-    // Encode addr into mock pin registers (same layout as real hardware)
-    //   A0–A4  → PIND bits 7:3
-    //   A5–A10 → PINB bits 5:0
-    //   A11–A15 → mock_mcpA bits 4:0
-    mock_PIND  = (uint8_t)((addr & 0x1F) << 3);        // A0–A4
-    mock_PINB  = (uint8_t)((addr >> 5)   & 0x3F);      // A5–A10
-    mock_mcpA  = (uint8_t)((addr >> 11)  & 0x1F);      // A11–A15
-    mock_mcpB  = data;                                  // D0–D7
+    mock_PIND = (uint8_t)((addr & 0x1F) << 3);
+    mock_PINB = (uint8_t)((addr >> 5)   & 0x3F);
+    mock_PINC = rwb ? 0x01 : 0x00;        // bit 0 = RWB
+    mock_mcpA = (uint8_t)((addr >> 11)  & 0x1F);
+    mock_mcpB = data;
 
     mock_expected_addr = addr;
     mock_expected_data = data;
+    mock_expected_rwb  = rwb;
 
-    // Fire the ISR directly — no interrupt pin needed
     onClockRise();
-
     counter++;
 }
 #endif
@@ -181,7 +185,6 @@ static void mockTick() {
 // ── Loop ───────────────────────────────────────────────────────────────
 void loop() {
 #ifdef MOCK_HW
-    // Generate one fake edge per second
     static uint32_t lastTick = 0;
     if (millis() - lastTick >= 1000) {
         lastTick = millis();
@@ -199,6 +202,8 @@ void loop() {
         ((uint16_t)((snap.pd >> 3) & 0x1F))
       | ((uint16_t)( snap.pb       & 0x3F) << 5);
 
+    bool rwb = (snap.pc & 0x01);   // HIGH = read, LOW = write
+
     uint8_t mcpA, mcpB;
     mcpReadTwo(MCP_GPIOA, &mcpA, &mcpB);
 
@@ -206,22 +211,26 @@ void loop() {
     uint8_t  data    = mcpB;
 
 #ifdef MOCK_HW
-    bool ok = (address == mock_expected_addr) && (data == mock_expected_data);
+    bool ok = (address == mock_expected_addr)
+           && (data    == mock_expected_data)
+           && (rwb     == mock_expected_rwb);
     ok ? mock_pass++ : mock_fail++;
 
-    char buf[80];
+    char buf[96];
     snprintf(buf, sizeof(buf),
-             "%7lu |        $%04X |           $%02X |    $%04X |       $%02X | %s  [P:%lu F:%lu]",
+             "%7lu |    $%04X |       $%02X |   %c |    $%04X |       $%02X |   %c | %s  [P:%lu F:%lu]",
              g_cycle,
-             (unsigned int)mock_expected_addr, mock_expected_data,
-             (unsigned int)address, data,
+             (unsigned int)mock_expected_addr, mock_expected_data, mock_expected_rwb ? 'R' : 'W',
+             (unsigned int)address,            data,               rwb               ? 'R' : 'W',
              ok ? "PASS" : "FAIL",
              mock_pass, mock_fail);
     Serial.println(buf);
 #else
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%lu,%lu,%04X,%02X",
-             (unsigned long)g_cycle, millis(), address, data);
+    // CSV: cycle,millis,address,data,R/W
+    char buf[36];
+    snprintf(buf, sizeof(buf), "%lu,%lu,%04X,%02X,%c",
+             (unsigned long)g_cycle, millis(), address, data,
+             rwb ? 'R' : 'W');
     Serial.println(buf);
 #endif
 }

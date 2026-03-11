@@ -47,6 +47,7 @@ def make_table() -> Table:
     t.add_column("Boot (ms)",  style="dim yellow",   justify="right",  width=12)
     t.add_column("Address",    style="bold green",   justify="center", width=9)
     t.add_column("Data",       style="bold magenta", justify="center", width=6)
+    t.add_column("R/W",        justify="center",                       width=5)
     return t
 
 
@@ -71,9 +72,9 @@ def main():
                 if line == "READY":
                     continue
 
-                # Expect CSV: cycle,millis,address,data
+                # Expect CSV: cycle,millis,address,data,R/W
                 parts = line.split(",")
-                if len(parts) != 4:
+                if len(parts) != 5:
                     continue
 
                 try:
@@ -81,10 +82,12 @@ def main():
                     boot_ms = int(parts[1])
                     address = parts[2].upper()
                     data    = parts[3].upper()
+                    rw      = parts[4].strip().upper()
                 except ValueError:
                     continue
 
-                ts = datetime.now().strftime("%Y-%m-%d  %H:%M:%S.%f")[:-3]
+                ts     = datetime.now().strftime("%Y-%m-%d  %H:%M:%S.%f")[:-3]
+                rw_fmt = "[bold cyan]R[/]" if rw == "R" else "[bold yellow]W[/]"
 
                 table.add_row(
                     str(cycle),
@@ -92,6 +95,7 @@ def main():
                     f"{boot_ms:,}",
                     f"${address}",
                     f"${data}",
+                    rw_fmt,
                 )
 
     except serial.SerialException as e:

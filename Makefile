@@ -2,7 +2,7 @@ FQBN   := arduino:avr:uno
 PORT   := /dev/cu.usbserial-210
 SKETCH := bus_monitor
 
-.PHONY: compile upload flash monitor clean compile-test flash-test compile-mock flash-mock
+.PHONY: compile upload flash monitor clean compile-test flash-test compile-mock flash-mock compile-mcp-test flash-mcp-test
 
 compile:
 	arduino-cli compile --fqbn $(FQBN) $(SKETCH)
@@ -35,3 +35,10 @@ flash-mock: compile-mock
 
 test: flash-mock
 	.venv/bin/python run_tests.py $(PORT)
+
+compile-mcp-test:
+	arduino-cli compile --fqbn $(FQBN) mcp_test
+
+flash-mcp-test: compile-mcp-test
+	arduino-cli upload --fqbn $(FQBN) --port $(PORT) mcp_test
+	arduino-cli monitor --port $(PORT) --config baudrate=115200

@@ -8,8 +8,7 @@ Captures address bus, data bus, and R/W signal from a WDC W65C02S CPU on every c
 |---|---|---|
 | PHI2 (clock) | D2 | Interrupt (INT0) |
 | RWB | A0 | HIGH=read, LOW=write |
-| A0–A4 | D3–D7 | |
-| A5–A10 | D8–D13 | |
+| A0–A10 | D3–D13 | A0→D3 … A10→D13 |
 | A11–A15 | MCP PA0–PA4 | |
 | D0–D7 | MCP PB0–PB7 | |
 

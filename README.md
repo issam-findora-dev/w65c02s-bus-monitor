@@ -28,9 +28,11 @@ python3 -m venv .venv
 ## Usage
 
 ```bash
-make flash        # compile + upload monitor
+make compile      # compile only
+make upload       # upload only (skip compile)
+make flash        # compile + upload
 make read         # stream bus output to terminal
-make test         # run hardware-free self-test (mock mode)
+make test         # hardware-free self-test (mock mode, no wiring changes)
 make flash-mcp-test  # validate MCP23017 wiring
 ```
 
@@ -60,6 +62,20 @@ Makefile            All build/flash/test commands
 | Symptom | Likely cause |
 |---|---|
 | Data always `$00` | MCP not found — run `make flash-mcp-test` |
-| MCP not found | Wrong I2C address — run I2C scanner sketch |
+| MCP not found | Wrong I2C address — see I2C scanner below |
 | Missing clock edges | CPU clock too fast for I2C (keep ≤ 5 kHz) |
 | Garbled output | Wrong baud rate — set terminal to 115200 |
+
+### Find MCP23017 I2C address
+
+```cpp
+#include <Wire.h>
+void setup() {
+    Serial.begin(115200); Wire.begin();
+    for (uint8_t a = 1; a < 127; a++) {
+        Wire.beginTransmission(a);
+        if (Wire.endTransmission() == 0) { Serial.print("Found: 0x"); Serial.println(a, HEX); }
+    }
+}
+void loop() {}
+```

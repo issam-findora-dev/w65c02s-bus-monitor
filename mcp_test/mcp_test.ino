@@ -6,7 +6,7 @@
  *
  * Tests
  * ─────
- *  1. I2C presence       – device responds at address 0x20
+ *  1. I2C presence       – device responds at address 0x27
  *  2. IODIRA write/read  – register survives a round-trip
  *  3. IODIRB write/read  – same for Port B
  *  4. GPPUA write/read   – pull-up register round-trip
@@ -78,7 +78,7 @@ void testPresence() {
     Serial.println(F("\n[ 1 ] I2C presence"));
     Wire.beginTransmission(MCP_ADDR);
     uint8_t err = Wire.endTransmission();
-    check("MCP23017 responds at 0x20", err == 0);
+    check("MCP23017 responds at 0x27", err == 0);
     if (err != 0) {
         Serial.print(F("      endTransmission error code: "));
         Serial.println(err);

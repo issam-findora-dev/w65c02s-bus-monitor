@@ -36,7 +36,7 @@
  *  D7            │  MCP23017 PB7
  *  MCP SDA       │  Arduino A4
  *  MCP SCL       │  Arduino A5
- *  MCP A0/A1/A2  │  GND  (I2C address = 0x20)
+ *  MCP A0/A1/A2  │  VCC  (I2C address = 0x27)
  *  MCP RESET     │  3.3 V or 5 V (tie high)
  *
  * Timing note

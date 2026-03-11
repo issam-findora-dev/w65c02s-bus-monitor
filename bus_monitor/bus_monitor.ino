@@ -61,7 +61,7 @@
 #define RWB_PIN     A0   // RWB  → PINC bit 0  (HIGH=read, LOW=write)
 
 // ── MCP23017 ───────────────────────────────────────────────────────────
-#define MCP_ADDR    0x20
+#define MCP_ADDR    0x27
 #define MCP_IODIRA  0x00
 #define MCP_IODIRB  0x01
 #define MCP_GPIOA   0x12

@@ -20,7 +20,7 @@
 
 #include <Wire.h>
 
-#define MCP_ADDR   0x20
+#define MCP_ADDR   0x27
 
 // ── Register map (IOCON.BANK = 0, factory default) ──────────────────
 #define REG_IODIRA  0x00
@@ -173,10 +173,11 @@ void setup() {
 
     Wire.begin();
     Wire.setClock(400000L);
+    Wire.setWireTimeout(3000, true);  // 3 ms timeout, reset bus on hang
 
     Serial.println(F("========================================"));
     Serial.println(F("  MCP23017 Validation Suite"));
-    Serial.println(F("  I2C addr: 0x20  |  SCL: A5  SDA: A4"));
+    Serial.println(F("  I2C addr: 0x27  |  SCL: A5  SDA: A4"));
     Serial.println(F("========================================"));
 
     testPresence();

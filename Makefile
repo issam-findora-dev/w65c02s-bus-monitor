@@ -13,7 +13,7 @@ upload:
 flash: compile upload
 
 monitor:
-	arduino-cli monitor --port $(PORT) --config baudrate=115200
+	.venv/bin/python read_serial.py $(PORT)
 
 read:
 	.venv/bin/python read_serial.py $(PORT)

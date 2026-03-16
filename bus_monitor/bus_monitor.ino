@@ -145,7 +145,7 @@ void setup() {
     pinMode(RWB_PIN,   INPUT);
 
     Wire.begin();
-    Wire.setClock(400000L);
+    Wire.setClock(100000L);
 
     Wire.beginTransmission(MCP_ADDR);
     Wire.write(MCP_IODIRA);
